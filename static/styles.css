@@ -649,6 +649,33 @@ textarea:focus {
   line-height: 1.6;
 }
 
+.setup-steps {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.setup-steps h2 {
+  margin-top: 8px;
+}
+
+.setup-steps h2:first-child {
+  margin-top: 0;
+}
+
+.setup-steps code {
+  display: block;
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 10px;
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
 @keyframes pulse {
   0%,
   100% {

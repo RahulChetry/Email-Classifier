@@ -12,6 +12,14 @@
         <p class="eyebrow">Gmail setup</p>
         <h1>Connection needs one setup step</h1>
         <p>{{ message }}</p>
+        <div class="setup-steps">
+          <h2>Local setup</h2>
+          <p>Create a Google Cloud OAuth client, download the JSON, rename it to <strong>credentials.json</strong>, and place it in this project folder.</p>
+          <h2>Render setup</h2>
+          <p>Create a Google OAuth <strong>Web application</strong> client and add your deployed callback URL:</p>
+          <code>https://YOUR-RENDER-URL/gmail/oauth2callback</code>
+          <p>Then paste the OAuth JSON into Render as <strong>GOOGLE_CLIENT_CONFIG_JSON</strong>.</p>
+        </div>
         <a class="setup-link" href="{{ url_for('index') }}">Back to classifier</a>
       </section>
     </main>
