@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Email Priority Classifier</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="app-frame" aria-label="Email priority classifier">
+        <header class="app-header">
+          <div class="brand-block">
+            <span class="brand-mark" aria-hidden="true">EP</span>
+            <div>
+              <p class="eyebrow">Traditional ML + GenAI</p>
+              <h1>Email Priority Classifier</h1>
+            </div>
+          </div>
+          <div class="status-strip" aria-label="Model summary">
+            <div class="status-item">
+              <span>Dataset</span>
+              <strong>10k</strong>
+            </div>
+            <div class="status-item">
+              <span>ML accuracy</span>
+              <strong>{{ "%.0f"|format((metrics.get("accuracy", 0) or 0) * 100) }}%</strong>
+            </div>
+            <div class="status-item">
+              <span>Modes</span>
+              <strong>2</strong>
+            </div>
+          </div>
+        </header>
+
+        <div class="workspace-grid">
+          <form id="classifier-form" class="composer" autocomplete="off">
+            <div class="composer-head">
+              <div>
+                <h2>Message</h2>
+                <p id="form-status">Ready</p>
+              </div>
+              <button class="ghost-button" type="button" id="clear-button">Clear</button>
+            </div>
+
+            <div class="sample-row" aria-label="Sample emails">
+              <button
+                type="button"
+                class="sample-chip"
+                data-subject="Urgent: payment failure for Acme Retail"
+                data-body="Acme Retail is blocked because payment processing is failing. Leadership expects an update before noon with owner, status, and next action."
+              >Urgent outage</button>
+              <button
+                type="button"
+                class="sample-chip"
+                data-subject="FYI: monthly all-hands recording"
+                data-body="The monthly all-hands recording is now available. Review it when convenient if you missed the meeting."
+              >Normal FYI</button>
+              <button
+                type="button"
+                class="sample-chip"
+                data-subject="Compliance audit evidence request"
+                data-body="Auditors need access logs and policy documents before end of day for the compliance review."
+              >Audit request</button>
+            </div>
+
+            <label class="field">
+              <span>Subject</span>
+              <input id="subject" name="subject" placeholder="Production database backup failed">
+            </label>
+
+            <label class="field grow-field">
+              <span>Email body</span>
+              <textarea id="body" name="body" rows="10" placeholder="Last night's backup job failed for the production database. Manual backup is required before noon."></textarea>
+            </label>
+
+            <div class="action-row">
+              <fieldset class="segmented" aria-label="Classifier mode">
+                <input type="radio" name="mode" id="mode-both" value="both" checked>
+                <label for="mode-both">Both</label>
+                <input type="radio" name="mode" id="mode-ml" value="ml">
+                <label for="mode-ml">ML</label>
+                <input type="radio" name="mode" id="mode-genai" value="genai">
+                <label for="mode-genai">GenAI</label>
+              </fieldset>
+              <button class="primary-button" type="submit">
+                <span class="button-dot" aria-hidden="true"></span>
+                <span id="classify-label">Classify</span>
+              </button>
+            </div>
+          </form>
+
+          <section class="insights" aria-live="polite">
+            <div class="priority-meter">
+              <span class="meter-label">Priority signal</span>
+              <div class="meter-track"><span id="meter-fill"></span></div>
+              <strong id="meter-text">Waiting</strong>
+            </div>
+
+            <article class="empty-state" id="empty-state">
+              <div class="empty-icon" aria-hidden="true"></div>
+              <h2>Awaiting email</h2>
+              <p>Results will appear here.</p>
+            </article>
+
+            <article class="result-card hidden" id="ml-result">
+              <div class="result-head">
+                <div>
+                  <span class="model-kicker">Model</span>
+                  <h2>Traditional ML</h2>
+                </div>
+                <span class="badge" data-label="">--</span>
+              </div>
+              <div class="score-line">
+                <span>Confidence</span>
+                <strong class="score-value">0%</strong>
+              </div>
+              <div class="confidence"><span></span></div>
+              <p class="detail"></p>
+            </article>
+
+            <article class="result-card hidden" id="genai-result">
+              <div class="result-head">
+                <div>
+                  <span class="model-kicker">Reasoning</span>
+                  <h2>GenAI</h2>
+                </div>
+                <span class="badge" data-label="">--</span>
+              </div>
+              <div class="score-line">
+                <span>Confidence</span>
+                <strong class="score-value">0%</strong>
+              </div>
+              <div class="confidence"><span></span></div>
+              <p class="detail"></p>
+            </article>
+          </section>
+        </div>
+
+        <section class="gmail-panel" aria-label="Gmail inbox classification">
+          <div class="gmail-head">
+            <div>
+              <p class="eyebrow">Gmail integration</p>
+              <h2>Classify Gmail inbox</h2>
+            </div>
+            <div class="gmail-actions">
+              <a class="connect-button" id="gmail-connect" href="/gmail/connect">Connect Gmail</a>
+              <button class="ghost-button" type="button" id="gmail-disconnect">Disconnect</button>
+            </div>
+          </div>
+
+          <div class="gmail-setup" id="gmail-setup">
+            <strong id="gmail-status-title">Checking Gmail setup</strong>
+            <span id="gmail-status-detail">Looking for Google dependencies, credentials, and token.</span>
+          </div>
+
+          <form class="gmail-controls" id="gmail-form">
+            <label class="field">
+              <span>Gmail search query</span>
+              <input id="gmail-query" name="query" value="in:inbox newer_than:30d" placeholder="in:inbox newer_than:30d">
+            </label>
+            <label class="field small-field">
+              <span>Emails</span>
+              <input id="gmail-limit" name="limit" type="number" min="1" max="500" value="25">
+            </label>
+            <label class="toggle-field">
+              <input id="gmail-apply-labels" name="apply_labels" type="checkbox">
+              <span>Apply Gmail labels</span>
+            </label>
+            <fieldset class="segmented gmail-mode" aria-label="Gmail classifier mode">
+              <input type="radio" name="gmail_mode" id="gmail-mode-ml" value="ml" checked>
+              <label for="gmail-mode-ml">ML</label>
+              <input type="radio" name="gmail_mode" id="gmail-mode-genai" value="genai">
+              <label for="gmail-mode-genai">GenAI</label>
+            </fieldset>
+            <button class="primary-button" type="submit">
+              <span class="button-dot" aria-hidden="true"></span>
+              <span id="gmail-classify-label">Classify Gmail</span>
+            </button>
+          </form>
+
+          <div class="gmail-summary" id="gmail-summary">No Gmail batch has run yet.</div>
+          <div class="gmail-table-wrap">
+            <table class="gmail-table">
+              <thead>
+                <tr>
+                  <th>Prediction</th>
+                  <th>Subject</th>
+                  <th>From</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody id="gmail-results">
+                <tr>
+                  <td colspan="4">Connect Gmail, then classify a batch.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const form = document.querySelector("#classifier-form");
+      const subjectInput = document.querySelector("#subject");
+      const bodyInput = document.querySelector("#body");
+      const formStatus = document.querySelector("#form-status");
+      const emptyState = document.querySelector("#empty-state");
+      const mlCard = document.querySelector("#ml-result");
+      const genaiCard = document.querySelector("#genai-result");
+      const meterFill = document.querySelector("#meter-fill");
+      const meterText = document.querySelector("#meter-text");
+      const classifyLabel = document.querySelector("#classify-label");
+      const gmailConnect = document.querySelector("#gmail-connect");
+      const gmailDisconnect = document.querySelector("#gmail-disconnect");
+      const gmailForm = document.querySelector("#gmail-form");
+      const gmailSetup = document.querySelector("#gmail-setup");
+      const gmailStatusTitle = document.querySelector("#gmail-status-title");
+      const gmailStatusDetail = document.querySelector("#gmail-status-detail");
+      const gmailSummary = document.querySelector("#gmail-summary");
+      const gmailResults = document.querySelector("#gmail-results");
+      const gmailClassifyLabel = document.querySelector("#gmail-classify-label");
+
+      function confidencePercent(value) {
+        return Math.round((value || 0) * 100);
+      }
+
+      function updateMeter(result) {
+        if (!result) {
+          meterFill.style.width = "0%";
+          meterText.textContent = "Waiting";
+          meterText.dataset.label = "";
+          return;
+        }
+
+        const percent = confidencePercent(result.confidence);
+        meterFill.style.width = `${percent}%`;
+        meterText.textContent = result.label;
+        meterText.dataset.label = result.label;
+      }
+
+      function showCard(card, result, detail) {
+        card.classList.remove("hidden");
+        const badge = card.querySelector(".badge");
+        const bar = card.querySelector(".confidence span");
+        const score = card.querySelector(".score-value");
+        const percent = confidencePercent(result.confidence);
+        badge.textContent = result.label;
+        badge.dataset.label = result.label;
+        bar.style.width = `${percent}%`;
+        score.textContent = `${percent}%`;
+        card.querySelector(".detail").textContent = detail;
+      }
+
+      function resetResults(status = "Ready") {
+        formStatus.textContent = status;
+        emptyState.classList.remove("hidden");
+        emptyState.querySelector("h2").textContent = "Awaiting email";
+        emptyState.querySelector("p").textContent = "Results will appear here.";
+        mlCard.classList.add("hidden");
+        genaiCard.classList.add("hidden");
+        updateMeter(null);
+      }
+
+      document.querySelectorAll(".sample-chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          subjectInput.value = button.dataset.subject;
+          bodyInput.value = button.dataset.body;
+          resetResults("Sample loaded");
+        });
+      });
+
+      document.querySelector("#clear-button").addEventListener("click", () => {
+        form.reset();
+        document.querySelector("#mode-both").checked = true;
+        resetResults();
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const payload = {
+          subject: formData.get("subject"),
+          body: formData.get("body"),
+          mode: formData.get("mode")
+        };
+
+        emptyState.classList.add("hidden");
+        mlCard.classList.add("hidden");
+        genaiCard.classList.add("hidden");
+        formStatus.textContent = "Classifying";
+        classifyLabel.textContent = "Working";
+        form.classList.add("is-loading");
+
+        try {
+          const response = await fetch("/predict", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            emptyState.classList.remove("hidden");
+            emptyState.querySelector("h2").textContent = "Needs text";
+            emptyState.querySelector("p").textContent = data.error || "Could not classify this email.";
+            updateMeter(null);
+            formStatus.textContent = "Needs input";
+            return;
+          }
+
+          if (data.ml) {
+            const probs = Object.entries(data.ml.probabilities || {})
+              .map(([label, value]) => `${label}: ${confidencePercent(value)}%`)
+              .join(" / ");
+            showCard(mlCard, data.ml, probs);
+          }
+
+          if (data.genai) {
+            const source = data.genai.source === "api" ? "API" : "fallback";
+            showCard(genaiCard, data.genai, `${source}: ${data.genai.rationale}`);
+          }
+
+          updateMeter(data.ml || data.genai);
+          formStatus.textContent = "Complete";
+        } catch (error) {
+          emptyState.classList.remove("hidden");
+          emptyState.querySelector("h2").textContent = "Connection issue";
+          emptyState.querySelector("p").textContent = "The classifier service did not respond.";
+          updateMeter(null);
+          formStatus.textContent = "Service unavailable";
+        } finally {
+          classifyLabel.textContent = "Classify";
+          form.classList.remove("is-loading");
+        }
+      });
+
+      function setGmailSetup(status) {
+        gmailSetup.dataset.ready = status.connected ? "true" : "false";
+        gmailDisconnect.disabled = !status.connected;
+        gmailForm.querySelector("button[type='submit']").disabled = !status.connected;
+
+        if (!status.dependencies) {
+          gmailStatusTitle.textContent = "Install Gmail dependencies";
+          gmailStatusDetail.textContent = "Run pip install -r requirements.txt, then restart the app.";
+        } else if (!status.credentials) {
+          gmailStatusTitle.textContent = "Add credentials.json";
+          gmailStatusDetail.textContent = "Create a Google Cloud OAuth desktop client and place credentials.json in this project folder.";
+        } else if (!status.connected) {
+          gmailStatusTitle.textContent = "Gmail is ready to connect";
+          gmailStatusDetail.textContent = "Click Connect Gmail and approve the requested Gmail access.";
+        } else {
+          gmailStatusTitle.textContent = "Gmail connected";
+          gmailStatusDetail.textContent = "You can classify matching messages and optionally apply AI labels.";
+        }
+      }
+
+      async function refreshGmailStatus() {
+        const response = await fetch("/gmail/status");
+        setGmailSetup(await response.json());
+      }
+
+      function renderGmailRows(emails) {
+        if (!emails.length) {
+          gmailResults.innerHTML = '<tr><td colspan="4">No emails matched that query.</td></tr>';
+          return;
+        }
+
+        gmailResults.innerHTML = emails.map((email) => {
+          const prediction = email.prediction;
+          const confidence = confidencePercent(prediction.confidence);
+          return `
+            <tr>
+              <td><span class="badge table-badge" data-label="${prediction.label}">${prediction.label}</span></td>
+              <td>
+                <strong>${escapeHtml(email.subject)}</strong>
+                <span>${escapeHtml(email.snippet || "")}</span>
+              </td>
+              <td>${escapeHtml(email.sender || "")}</td>
+              <td>${confidence}%</td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      gmailDisconnect.addEventListener("click", async () => {
+        await fetch("/gmail/disconnect", {method: "POST"});
+        gmailSummary.textContent = "Gmail disconnected.";
+        gmailResults.innerHTML = '<tr><td colspan="4">Connect Gmail, then classify a batch.</td></tr>';
+        await refreshGmailStatus();
+      });
+
+      gmailForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(gmailForm);
+        const payload = {
+          query: formData.get("query"),
+          limit: Number(formData.get("limit") || 25),
+          mode: formData.get("gmail_mode"),
+          apply_labels: document.querySelector("#gmail-apply-labels").checked
+        };
+
+        gmailClassifyLabel.textContent = "Working";
+        gmailForm.classList.add("is-loading");
+        gmailSummary.textContent = "Fetching and classifying Gmail messages.";
+
+        try {
+          const response = await fetch("/gmail/classify", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            gmailSummary.textContent = data.error || "Gmail classification failed.";
+            if (data.status) {
+              setGmailSetup(data.status);
+            }
+            return;
+          }
+
+          renderGmailRows(data.emails || []);
+          gmailSummary.textContent = `${data.count} emails classified with ${data.mode.toUpperCase()}${data.applied_labels ? " and labeled in Gmail" : ""}.`;
+        } catch (error) {
+          gmailSummary.textContent = "The Gmail classifier did not respond.";
+        } finally {
+          gmailClassifyLabel.textContent = "Classify Gmail";
+          gmailForm.classList.remove("is-loading");
+        }
+      });
+
+      refreshGmailStatus();
+    </script>
+  </body>
+</html>

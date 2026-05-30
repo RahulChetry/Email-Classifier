@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gmail Setup</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="setup-card">
+        <p class="eyebrow">Gmail setup</p>
+        <h1>Connection needs one setup step</h1>
+        <p>{{ message }}</p>
+        <a class="setup-link" href="{{ url_for('index') }}">Back to classifier</a>
+      </section>
+    </main>
+  </body>
+</html>
